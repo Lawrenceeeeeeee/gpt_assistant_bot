@@ -239,49 +239,6 @@ async def on_message(message):
 
 # 运行机器人
 bot.run(token)
-
-
-'''
-<
-    Message id=1265589234568400976 
-    channel=<
-        TextChannel id=1245001641128755306 
-        name='chatbot' 
-        position=0 
-        nsfw=False 
-        news=False 
-        category_id=1245001641128755304
-    > 
-    type=<MessageType.default: 0> 
-    author=<
-        Member id=1133337584815308831 
-        name='lawrenceguo' 
-        global_name='Lawrence' 
-        bot=False 
-        nick=None 
-        guild=<
-            Guild id=1245001640524779550 
-            name='Lawrence的妙妙屋' 
-            shard_id=0 
-            chunked=False member_count=7
-        >
-    > 
-    flags=<MessageFlags value=0>
->
-
-
-'''
-
-    
-# if __name__ == "__main__":
-#     text = "请描述一下这张图片"
-#     urls = [
-#         "https://upload-bbs.miyoushe.com/upload/2024/07/22/288909600/5073838317d8bf76afdb06020fd83424_7475603835828891488.png?x-oss-process=image//resize,s_600/quality,q_80/auto-orient,0/interlace,1/format,png"
-#     ]
-    
-#     msg = UserMessage(text=text, image_urls=urls)
-#     print(msg.user_content())
-    
     
     
     
