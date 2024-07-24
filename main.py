@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, ClassVar
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 import os
 from dotenv import load_dotenv
 import requests
@@ -84,12 +84,15 @@ tools_selection = {
 }
 
 
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+aclient = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+thread = client.beta.threads.create()
+
+
 class UserMessage(BaseModel):
     text: str | None = None
     image_urls: list[str] | None = None
     file_urls: list[discord.message.Attachment] | None = None
-    
-    client: ClassVar[OpenAI] = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     
     class Config:
         arbitrary_types_allowed = True
@@ -121,7 +124,7 @@ class UserMessage(BaseModel):
                     f.write(chunk)
         return local_filename
 
-    def attachments(self) -> List[str]:
+    async def attachments(self) -> List[str]:
         attachments_dicts = []
         if self.file_urls:
             for url in self.file_urls:
@@ -138,7 +141,7 @@ class UserMessage(BaseModel):
                 
                 self.download_file(url.url, local_filename)
                 with open(local_filename, "rb") as f:
-                    response = self.client.files.create(file=f, purpose="assistants")
+                    response = await aclient.files.create(file=f, purpose="assistants")
                     file_id = response.id
                     attachment = {
                         "file_id": file_id,
@@ -162,8 +165,6 @@ intents.message_content = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 tree = bot.tree
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-thread = client.beta.threads.create()
 
 threads = {}
 
@@ -174,9 +175,9 @@ async def on_ready():
     print(f"載入 {len(slash)} 個斜線指令")
 
 
-def check_thread(thread_id):
+async def check_thread(thread_id):
     try:
-        res = client.beta.threads.retrieve(thread_id)
+        res = await aclient.beta.threads.retrieve(thread_id)
     except Exception as e:
         res = None
     return res
@@ -201,13 +202,13 @@ async def on_message(message):
             return
     
     if channel_id not in threads.keys():
-        thread_info = client.beta.threads.create()
+        thread_info = await aclient.beta.threads.create()
         threads[channel_id] = thread_info.id
-    elif check_thread(threads[channel_id]) is None:
-        thread_info = client.beta.threads.create()
+    elif await check_thread(threads[channel_id]) is None:
+        thread_info = await aclient.beta.threads.create()
         threads[channel_id] = thread_info.id
         
-    chatbot = Assistant(client, threads[channel_id])
+    chatbot = Assistant(aclient, threads[channel_id])
     
     image_urls = []
     files = []
@@ -227,28 +228,29 @@ async def on_message(message):
         image_urls=image_urls if image_urls else None,
         file_urls=files if files else None
     )
-    print(msg.user_content(), msg.attachments())
-    chatbot.add_message(msg.user_content(), msg.attachments())
+    attachments = await msg.attachments()
+    print(msg.user_content())
+    await chatbot.add_message(msg.user_content(), attachments)
     
     async with message.channel.typing():
-        response = chatbot.create_a_run()
+        response = await chatbot.create_a_run()
     # res.data[0].content[0].text.value
     
-    for res in response.data[0].content:
-        if res.type == "text":
-            response = res.text.value
-        else:
-            response = "Unsupported message type"
-        # 发送响应
-        print(response)
-        await message.reply(response, mention_author=False)
+        for res in response.data[0].content:
+            if res.type == "text":
+                response = res.text.value
+            else:
+                response = "Unsupported message type"
+            # 发送响应
+            print(response)
+            await message.reply(response, mention_author=False)
 
 
 @bot.tree.command(name = "clear_history", description = "清除历史记录")
 async def clear_history(interaction: discord.Interaction):
     channel_id = interaction.channel.id
-    response = client.beta.threads.delete(threads[channel_id])
-    new_thread = client.beta.threads.create()
+    response = await aclient.beta.threads.delete(threads[channel_id])
+    new_thread = await aclient.beta.threads.create()
     threads[channel_id] = new_thread.id
     await interaction.response.send_message("[系统消息] 聊天记录已清除", ephemeral=True)
 

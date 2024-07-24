@@ -3,6 +3,7 @@ import os
 from pydantic import BaseModel
 import time
 from dotenv import load_dotenv
+from retry import retry
 
 load_dotenv()
 
@@ -11,32 +12,33 @@ class Assistant():
     # thread = client.beta.threads.create()
     assistant_id = "asst_rQTRO7OnR7FrMnd4c5MpdeDO"
     
-    def __init__(self, client, thread_id) -> None:
-        self.client = client
+    def __init__(self, aclient, thread_id) -> None:
+        self.aclient = aclient
         self.thread_id = thread_id
 
-    def add_message(self, content, attachments=None) -> None:
+    async def add_message(self, content, attachments=None) -> None:
         if attachments is None:
-            message = self.client.beta.threads.messages.create(
+            message = await self.aclient.beta.threads.messages.create(
                 thread_id=self.thread_id,
                 role="user",
                 content=content,
             )
         else:
-            message = self.client.beta.threads.messages.create(
+            message = await self.aclient.beta.threads.messages.create(
                 thread_id=self.thread_id,
                 role="user",
                 content=content,
                 attachments=attachments,
             )
 
-    def create_a_run(self):
+    @retry(tries=5, delay=1)
+    async def create_a_run(self):
         # instruction = None
         # if "name" in kwargs:
         #     instruction = f"发送者是：{kwargs['name']}"
         #     print(instruction)
         
-        run = self.client.beta.threads.runs.create_and_poll(
+        run = await self.aclient.beta.threads.runs.create_and_poll(
             assistant_id=self.assistant_id,
             thread_id=self.thread_id,
         )
@@ -45,7 +47,7 @@ class Assistant():
             print(run.status)
             time.sleep(1)
 
-        messages = self.client.beta.threads.messages.list(thread_id=self.thread_id)
+        messages = await self.aclient.beta.threads.messages.list(thread_id=self.thread_id)
         return messages
 
 if __name__ == "__main__":
