@@ -84,8 +84,6 @@ tools_selection = {
 }
 
 
-
-
 class UserMessage(BaseModel):
     text: str | None = None
     image_urls: list[str] | None = None
@@ -162,11 +160,19 @@ intents.message_content = True
 
 # 创建一个新的 bot 客户端
 bot = commands.Bot(command_prefix='!', intents=intents)
+tree = bot.tree
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 thread = client.beta.threads.create()
 
 threads = {}
+
+@bot.event
+async def on_ready():
+    slash = await bot.tree.sync()
+    print(f"目前登入身份 --> {bot.user}")
+    print(f"載入 {len(slash)} 個斜線指令")
+
 
 def check_thread(thread_id):
     try:
@@ -236,6 +242,15 @@ async def on_message(message):
         # 发送响应
         print(response)
         await message.reply(response, mention_author=False)
+
+
+@bot.tree.command(name = "clear_history", description = "清除历史记录")
+async def clear_history(interaction: discord.Interaction):
+    channel_id = interaction.channel.id
+    response = client.beta.threads.delete(threads[channel_id])
+    new_thread = client.beta.threads.create()
+    threads[channel_id] = new_thread.id
+    await interaction.response.send_message("[系统消息] 聊天记录已清除", ephemeral=True)
 
 # 运行机器人
 bot.run(token)
