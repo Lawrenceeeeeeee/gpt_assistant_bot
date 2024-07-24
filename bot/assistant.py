@@ -11,12 +11,15 @@ class Assistant():
     # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     # thread = client.beta.threads.create()
     assistant_id = "asst_rQTRO7OnR7FrMnd4c5MpdeDO"
+    prev_run_id: str | None = None
     
     def __init__(self, aclient, thread_id) -> None:
         self.aclient = aclient
         self.thread_id = thread_id
 
+    @retry()
     async def add_message(self, content, attachments=None) -> None:
+        
         if attachments is None:
             message = await self.aclient.beta.threads.messages.create(
                 thread_id=self.thread_id,
@@ -42,6 +45,7 @@ class Assistant():
             assistant_id=self.assistant_id,
             thread_id=self.thread_id,
         )
+        prev_run_id = run.id
 
         while run.status != "completed":
             print(run.status)

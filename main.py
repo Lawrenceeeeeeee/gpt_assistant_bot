@@ -235,15 +235,15 @@ async def on_message(message):
     async with message.channel.typing():
         response = await chatbot.create_a_run()
     # res.data[0].content[0].text.value
-    
-        for res in response.data[0].content:
-            if res.type == "text":
-                response = res.text.value
-            else:
-                response = "Unsupported message type"
-            # 发送响应
-            print(response)
-            await message.reply(response, mention_author=False)
+        if response.data[0].role == "assistant":
+            for res in response.data[0].content:                
+                if res.type == "text":
+                    response = res.text.value
+                else:
+                    response = "Unsupported message type"
+                # 发送响应
+                print(response)
+                await message.reply(response, mention_author=False)
 
 
 @bot.tree.command(name = "clear_history", description = "清除历史记录")
