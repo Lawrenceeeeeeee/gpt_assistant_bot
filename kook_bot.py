@@ -186,8 +186,6 @@ async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the func
     mentioned_ids = [mention['id'] for mention in msg.extra['kmarkdown']['mention_part']]
     mentioned = True if bot_id in mentioned_ids else False
     
-    pprint(msg.__dict__)
-    
     try:
         content = json.loads(msg.content)
     except Exception as e:
@@ -209,7 +207,6 @@ async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the func
         
         if type(content) == list:
             for module in content[0]['modules']:
-                print(type(module))
                 if module['type'] == "container": # image
                     images.append(module['elements'][0]['src'])
                 elif module['type'] == "file":
@@ -227,8 +224,9 @@ async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the func
             files=files if files else None
         )
         attachments = await user_message.attachments()
-        # print(msg.user_content())
-        await chatbot.add_message(await user_message.user_content(), attachments)
+        user_content_msg = await user_message.user_content()
+        print(user_content_msg)
+        await chatbot.add_message(user_content_msg, attachments)
         
         response = await chatbot.create_a_run()
         # res.data[0].content[0].text.value
