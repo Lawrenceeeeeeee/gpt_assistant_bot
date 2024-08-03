@@ -240,6 +240,18 @@ async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the func
                 print(response)
                 await msg.reply(response, mention_author=False)
 
+
+@bot.command() 
+async def clear_history(msg:Message):
+    channel_id = msg._ctx.channel._id
+    if channel_id not in threads.keys():
+        await msg.reply("[系统消息] 无需清除聊天记录", mention_author=False)
+        return
+    response = await aclient.beta.threads.delete(threads[channel_id])
+    new_thread = await aclient.beta.threads.create()
+    threads[channel_id] = new_thread.id
+    await msg.reply("[系统消息] 聊天记录已清除", ephemeral=True)
+
 if __name__ == '__main__':
     bot.run() 
 
