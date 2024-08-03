@@ -17,7 +17,7 @@ class Assistant():
         self.aclient = aclient
         self.thread_id = thread_id
 
-    @retry()
+    @retry(tries=5, delay=1)
     async def add_message(self, content, attachments=None) -> None:
         
         if attachments is None:
