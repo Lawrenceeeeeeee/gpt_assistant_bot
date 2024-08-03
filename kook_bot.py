@@ -10,7 +10,7 @@ import json
 from urllib.parse import urlparse
 
 from bot import Assistant
-from khl import Bot, Message, EventTypes, Event
+from khl import Bot, Message, EventTypes, Event, PrivateMessage, PublicMessage
 
 load_dotenv()
 
@@ -178,7 +178,7 @@ async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the func
     bot_info = await bot.client.fetch_me()
     bot_id = bot_info.id
     
-    channel_id = msg._ctx.channel._id
+    channel_id = msg._ctx.channel._id if isinstance(msg, PublicMessage) else msg._ctx.channel.id
     author_id = msg.author_id
     author_nickname = msg.extra['author']['nickname']
     is_bot = msg.extra['author']['bot']
@@ -186,12 +186,19 @@ async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the func
     mentioned_ids = [mention['id'] for mention in msg.extra['kmarkdown']['mention_part']]
     mentioned = True if bot_id in mentioned_ids else False
     
+    def reply_decision():
+        if isinstance(msg,PrivateMessage):
+            return True
+        else:
+            if mentioned and not is_bot: return True
+            else: return False
+    
     try:
         content = json.loads(msg.content)
     except Exception as e:
         content = msg.content
     
-    if mentioned and not is_bot:
+    if reply_decision():
         if channel_id not in threads.keys():
             thread_info = await aclient.beta.threads.create()
             threads[channel_id] = thread_info.id
