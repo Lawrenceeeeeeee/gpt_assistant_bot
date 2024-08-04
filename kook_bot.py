@@ -8,9 +8,13 @@ import re
 from pprint import pprint
 import json
 from urllib.parse import urlparse
+import traceback
+import asyncio
+import random
 
 from bot import Assistant
-from khl import Bot, Message, EventTypes, Event, PrivateMessage, PublicMessage
+from khl import Bot, Message, MessageTypes, EventTypes, Event, PrivateMessage, PublicMessage
+from khl.card import Card, CardMessage, Module, Types, Element, Struct
 
 load_dotenv()
 
@@ -174,7 +178,8 @@ async def check_thread(thread_id):
     return res
 
 @bot.on_message()
-async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the function name will be used
+async def on_message(msg: Message):  # when `name` is not set, the function name will be used
+
     bot_info = await bot.client.fetch_me()
     bot_id = bot_info.id
     
@@ -186,11 +191,16 @@ async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the func
     mentioned_ids = [mention['id'] for mention in msg.extra['kmarkdown']['mention_part']]
     mentioned = True if bot_id in mentioned_ids else False
     
-    def reply_decision():
-        if isinstance(msg,PrivateMessage):
-            return True
+    async def reply_decision():
+        guild = await bot.client.fetch_guild(os.getenv("KOOK_GUILD_ID"))
+        guild_user = await guild.fetch_user(author_id)
+        if isinstance(msg,PrivateMessage) and guild_user.roles:
+            if msg.extra['kmarkdown']['raw_content'][0] != "/":
+                return True
+            else:
+                return False
         else:
-            if mentioned and not is_bot: return True
+            if mentioned and not is_bot and guild_user.roles: return True
             else: return False
     
     try:
@@ -198,7 +208,7 @@ async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the func
     except Exception as e:
         content = msg.content
     
-    if reply_decision():
+    if await reply_decision():
         if channel_id not in threads.keys():
             thread_info = await aclient.beta.threads.create()
             threads[channel_id] = thread_info.id
@@ -248,6 +258,125 @@ async def gpt_assistant_reply(msg: Message):  # when `name` is not set, the func
                 await msg.reply(response, mention_author=False)
 
 
+candidate = {}
+lock = asyncio.Lock()
+
+# 题库(从question.json文件中读取)
+with open("questions.json", "r") as f:
+    questions = json.load(f)
+
+@bot.on_event(EventTypes.JOINED_GUILD)
+async def join_guild_send_event(b: Bot, e: Event):
+    try:
+        print("user join guild", e.body)  # 用户加入了服务器
+        ch = await bot.client.fetch_public_channel(os.getenv("ENTRANCE_ID"))  # 获取指定文字频道的对象
+        ret = await ch.send(f"欢迎入群，(met){e.body['user_id']}(met)！请先查看私信，获取权限组")
+        print(f"ch.send | msg_id {ret['msg_id']}") # 方法1 发送消息的id
+
+        async with lock:
+            # 私信用户验证题目
+            question_num = random.randint(0, len(questions) - 1)
+            question = questions[question_num]
+            candidate[e.body['user_id']] = question_num
+            user = await bot.client.fetch_user(e.body['user_id'])
+            welcome_msg = [
+                            {
+                                "type": "card",
+                                "theme": "secondary",
+                                "size": "lg",
+                                "modules": [
+                                {
+                                    "type": "header",
+                                    "text": {
+                                    "type": "plain-text",
+                                    "content": "欢迎加入CUFER'S HUB！"
+                                    }
+                                },
+                                {
+                                    "type": "section",
+                                    "text": {
+                                    "type": "kmarkdown",
+                                    "content": f'''为了确保我们的社区安全，请先通过以下验证: 
+
+{question['question']}
+
+请用指令`/answer [答案]`进行回答。e.g. `/answer test`
+
+通过验证后，你将获得访问所有频道的权限。如果验证失败，请输入`/verify`重新获取验证题目。
+
+感谢您的配合，祝您在CUFER'S HUB愉快！
+
+如有任何问题，请联系管理员。
+                                    '''
+                                    }
+                                }
+                                ]
+                            }
+                        ]
+            await user.send(welcome_msg, type=MessageTypes.CARD)  # 发送私聊
+    except Exception as result:
+        print(traceback.format_exc())  # 打印报错详细信息
+
+'''
+入群验证设计思路
+
+用户通过指令`/verify`私信机器人，机器人随机从题库中抽取一道题目，发送给用户。用户用指令`/answer [答案]`回答问题，机器人验证答案是否正确，正确则给予用户相应的角色。
+
+输入`/verify`之后，先检查用户是否具有权限组。如果已经有了就提示无需验证，如果没有才发送验证消息。
+输入`/answer [答案]`之后，先检查candidate是否存在该用户id，如果不存在，提示用户先输入`/verify`指令。如果存在，检查答案是否正确，正确则给予用户相应的角色，错误则提示用户重新输入。
+
+如果用户需要验证，输入完指令后，bot随机抽取一道题目（产生一个随机数，代表题号），将题号存到candidates字典中，对应着用户id，然后发送给用户。
+'''
+
+
+
+@bot.command()
+async def verify(msg: Message):
+    if isinstance(msg, PrivateMessage):
+        user_id = msg.author_id
+        guild = await bot.client.fetch_guild(os.getenv("KOOK_GUILD_ID"))
+        guild_user = await guild.fetch_user(user_id)
+        if guild_user.roles:
+            await msg.reply("您已经通过验证了", mention_author=False)
+            return
+        if user_id in candidate.keys():
+            await msg.reply(f"题目已生成，请先完成题目：{questions[candidate[user_id]]['question']}", mention_author=False)
+            return
+
+        async with lock:
+            question_num = random.randint(0, len(questions) - 1)
+            question = questions[question_num]
+            candidate[user_id] = question_num
+            await msg.reply(f"问题：{question['question']}", mention_author=False)
+    else:
+        await msg.reply("请私信我进行验证", mention_author=False)
+
+@bot.command()
+async def answer(msg: Message, text: str):
+    if isinstance(msg, PrivateMessage):
+        user_id = msg.author_id
+        guild = await bot.client.fetch_guild(os.getenv("KOOK_GUILD_ID"))
+        guild_user = await guild.fetch_user(user_id)
+        if guild_user.roles:
+            await msg.reply("您已经通过验证了", mention_author=False)
+            return
+        if user_id not in candidate.keys():
+            await msg.reply("请先输入`/verify`指令", mention_author=False)
+            return
+
+        async with lock:
+            question_num = candidate[user_id]
+            question = questions[question_num]
+            if text == question['answer']:
+                await msg.reply("验证成功，欢迎来到CUFER'S HUB", mention_author=False)
+                await guild.grant_role(user_id, os.getenv("MEMBER_ID"))
+                del candidate[user_id]
+            else:
+                await msg.reply("验证失败，请重新输入`/verify`指令", mention_author=False)
+                del candidate[user_id]
+    else:
+        await msg.reply("请私信我进行验证", mention_author=False)
+
 @bot.command() 
 async def clear_history(msg:Message):
     channel_id = msg._ctx.channel._id
@@ -261,47 +390,4 @@ async def clear_history(msg:Message):
 
 if __name__ == '__main__':
     bot.run() 
-
-
-'''
-[{
-	"theme": "invisible",
-	"color": "",
-	"size": "lg",
-	"expand": false,
-	"modules": [{
-		"type": "file",
-		"title": "3 远期与期货 4.pdf",
-		"src": "https://img.kookapp.cn/attachments/2024-08/03/66ae2c7d88544.pdf",
-		"external": false,
-		"size": 572524,
-		"canDownload": true,
-		"elements": []
-	}, {
-		"type": "container",
-		"elements": [{
-			"type": "image",
-			"src": "https://img.kookapp.cn/assets/2024-08/03/dif2vLUtAF046046.jpeg",
-			"alt": "",
-			"size": "lg",
-			"circle": false,
-			"title": "",
-			"elements": []
-		}]
-	}, {
-		"type": "section",
-		"mode": "left",
-		"accessory": null,
-		"text": {
-			"type": "kmarkdown",
-			"content": "(met)3166139532(met) 测试",
-			"elements": []
-		},
-		"elements": []
-	}],
-	"type": "card"
-}]
-
-'[Lawrence (id: 2633893164)] [{"theme":"invisible","color":"","size":"lg","expand":false,"modules":[{"type":"section","mode":"left","accessory":null,"text":{"type":"kmarkdown","content":"(met)3166139532(met) 描述一下这张图片","elements":[]},"elements":[]},{"type":"container","elements":[{"type":"image","src":"https:\\/\\/img.kookapp.cn\\/assets\\/2024-08\\/03\\/bs9EDM2hM80dw09u.png","alt":"","size":"lg","circle":false,"title":"","elements":[]}]}],"type":"card"}]'
-
-'''
+    
