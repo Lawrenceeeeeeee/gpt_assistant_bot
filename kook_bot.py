@@ -13,7 +13,8 @@ import asyncio
 import random
 
 from bot import Assistant
-from khl import Bot, Message, MessageTypes, EventTypes, Event, PrivateMessage, PublicMessage
+from src import email_verif as ev
+from khl import Bot, Message, MessageTypes, EventTypes, Event, PrivateMessage, PublicMessage, guild
 from khl.card import Card, CardMessage, Module, Types, Element, Struct
 
 load_dotenv()
@@ -298,11 +299,11 @@ async def join_guild_send_event(b: Bot, e: Event):
                                     "type": "kmarkdown",
                                     "content": f'''为了确保我们的社区安全，请先通过以下验证: 
 
-{question['question']}
+请用指令`/verif [学号]`进行身份验证。稍后您将会在学校邮箱中收到验证码。放心, 您的学号经过加密处理, 即使是管理员也无法查看您的学号。
+然后请用指令`/captcha [验证码]`进行验证。
+e.g. `/verif 20xxxxxxxx`; `/captcha 123456`
 
-请用指令`/answer [答案]`进行回答。e.g. `/answer test`
-
-通过验证后，你将获得访问所有频道的权限。如果验证失败，请输入`/verify`重新获取验证题目。
+通过验证后，你将获得访问所有频道的权限。
 
 感谢您的配合，祝您在CUFER'S HUB愉快！
 
@@ -316,6 +317,14 @@ async def join_guild_send_event(b: Bot, e: Event):
             await user.send(welcome_msg, type=MessageTypes.CARD)  # 发送私聊
     except Exception as result:
         print(traceback.format_exc())  # 打印报错详细信息
+
+@bot.on_event(EventTypes.EXITED_GUILD)
+async def exit_guild_send_event(b: Bot, e: Event):
+    try:
+        ev.delete_user(e.body['user_id'])
+        print("user exit guild", e.body)  # 用户退出了服务器
+    except Exception as result:
+        print(traceback.format_exc())
 
 '''
 入群验证设计思路
@@ -379,7 +388,7 @@ async def answer(msg: Message, text: str):
 
 @bot.command() 
 async def clear_history(msg:Message):
-    channel_id = msg._ctx.channel._id
+    channel_id = msg._ctx.channel._id if isinstance(msg, PublicMessage) else msg._ctx.channel.id
     if channel_id not in threads.keys():
         await msg.reply("[系统消息] 无需清除聊天记录", mention_author=False)
         return
@@ -387,6 +396,31 @@ async def clear_history(msg:Message):
     new_thread = await aclient.beta.threads.create()
     threads[channel_id] = new_thread.id
     await msg.reply("[系统消息] 聊天记录已清除", ephemeral=True)
+
+# 邮箱验证
+@bot.command()
+async def verif(msg: Message, student_id: str):
+    if isinstance(msg, PrivateMessage):
+        user_id = msg.author_id
+        guild = await bot.client.fetch_guild(os.getenv("KOOK_GUILD_ID"))
+        guild_user = await guild.fetch_user(user_id)
+        if guild_user.roles:
+            await msg.reply("您已经通过验证了", mention_author=False)
+            return
+
+        result, message = ev.create_captcha(user_id, student_id)
+        await msg.reply(message, mention_author=False)
+
+@bot.command()
+async def captcha(msg: Message, code: str):
+    if isinstance(msg, PrivateMessage):
+        user_id = msg.author_id
+        result, message = ev.verify_captcha(user_id, code)
+        if result:
+            guild = await bot.client.fetch_guild(os.getenv("KOOK_GUILD_ID"))
+            await guild.grant_role(user_id, os.getenv("MEMBER_ID"))
+        await msg.reply(message, mention_author=False)
+
 
 if __name__ == '__main__':
     bot.run() 
