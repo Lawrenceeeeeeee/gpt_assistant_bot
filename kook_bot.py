@@ -271,7 +271,8 @@ async def join_guild_send_event(b: Bot, e: Event):
     try:
         print("user join guild", e.body)  # 用户加入了服务器
         ch = await bot.client.fetch_public_channel(os.getenv("ENTRANCE_ID"))  # 获取指定文字频道的对象
-        ret = await ch.send(f"欢迎入群，(met){e.body['user_id']}(met)！请先查看私信，获取权限组")
+        ret = await ch.send(f"欢迎入群，(met){e.body['user_id']}(met)！现在你应该只能看到“欢迎”分组。请先查看私信，获取身份组，然后就可以在服务器内畅谈了~\n\
+为了方便及时收到最新消息, 请务必开启kook通知权限, 并在kook中“我的”-“通知设置”中设置“手机始终接收通知”。")
         print(f"ch.send | msg_id {ret['msg_id']}") # 方法1 发送消息的id
 
         async with lock:
@@ -297,11 +298,21 @@ async def join_guild_send_event(b: Bot, e: Event):
                                     "type": "section",
                                     "text": {
                                     "type": "kmarkdown",
-                                    "content": f'''为了确保我们的社区安全，请先通过以下验证: 
+                                    "content": f'''为了确保我们的社区安全，我们需要验证您的学生身份: 
 
-请用指令`/verif [学号]`进行身份验证。稍后您将会在学校邮箱中收到验证码。放心, 您的学号经过加密处理, 即使是管理员也无法查看您的学号。
+请私信我指令`/verif [学号]`进行身份验证。稍后您将会在学校邮箱中收到验证码。放心，您的学号经过加密处理，即使是管理员也无法查看您的学号。
 然后请用指令`/captcha [验证码]`进行验证。
-e.g. `/verif 20xxxxxxxx`; `/captcha 123456`
+一定要注意输入格式哦！格式错误将不会有任何响应！
+如果您已毕业，请您私信管理员进行验证。
+
+示例:  
+    `/verif 20xxxxxxxx`
+    `/captcha 123456`
+
+**问：“诶？学校邮箱是什么？”**
+答：如果您没有申请过学校邮箱，请查阅[学校邮箱使用攻略](http://zhxy.cufe.edu.cn/info/1082/2097.htm)。申请成功之后再进行学号验证。
+**问：“怎么一直不发验证码？这bot是出问题了吗？”**
+答：请检查您的输入，确保您按照正确的指令格式书写，并且指令拼写无误，斜杠方向无误。如果仍然不行，请联系管理员。
 
 通过验证后，你将获得访问所有频道的权限。
 
@@ -326,20 +337,8 @@ async def exit_guild_send_event(b: Bot, e: Event):
     except Exception as result:
         print(traceback.format_exc())
 
-'''
-入群验证设计思路
 
-用户通过指令`/verify`私信机器人，机器人随机从题库中抽取一道题目，发送给用户。用户用指令`/answer [答案]`回答问题，机器人验证答案是否正确，正确则给予用户相应的角色。
-
-输入`/verify`之后，先检查用户是否具有权限组。如果已经有了就提示无需验证，如果没有才发送验证消息。
-输入`/answer [答案]`之后，先检查candidate是否存在该用户id，如果不存在，提示用户先输入`/verify`指令。如果存在，检查答案是否正确，正确则给予用户相应的角色，错误则提示用户重新输入。
-
-如果用户需要验证，输入完指令后，bot随机抽取一道题目（产生一个随机数，代表题号），将题号存到candidates字典中，对应着用户id，然后发送给用户。
-'''
-
-
-
-@bot.command()
+# @bot.command()
 async def verify(msg: Message):
     if isinstance(msg, PrivateMessage):
         user_id = msg.author_id
@@ -360,7 +359,7 @@ async def verify(msg: Message):
     else:
         await msg.reply("请私信我进行验证", mention_author=False)
 
-@bot.command()
+# @bot.command()
 async def answer(msg: Message, text: str):
     if isinstance(msg, PrivateMessage):
         user_id = msg.author_id
@@ -400,26 +399,37 @@ async def clear_history(msg:Message):
 # 邮箱验证
 @bot.command()
 async def verif(msg: Message, student_id: str):
-    if isinstance(msg, PrivateMessage):
-        user_id = msg.author_id
-        guild = await bot.client.fetch_guild(os.getenv("KOOK_GUILD_ID"))
-        guild_user = await guild.fetch_user(user_id)
-        if guild_user.roles:
-            await msg.reply("您已经通过验证了", mention_author=False)
-            return
+    try:
+        if isinstance(msg, PrivateMessage):
+            user_id = msg.author_id
+            guild = await bot.client.fetch_guild(os.getenv("KOOK_GUILD_ID"))
+            guild_user = await guild.fetch_user(user_id)
+            if guild_user.roles:
+                await msg.reply("您已经通过验证了", mention_author=False)
+                return
 
-        result, message = ev.create_captcha(user_id, student_id)
-        await msg.reply(message, mention_author=False)
+            result, message = ev.create_captcha(user_id, student_id)
+            await msg.reply(message, mention_author=False)
+    except Exception as result:
+        print(traceback.format_exc())
 
 @bot.command()
 async def captcha(msg: Message, code: str):
-    if isinstance(msg, PrivateMessage):
-        user_id = msg.author_id
-        result, message = ev.verify_captcha(user_id, code)
-        if result:
+    try:
+        if isinstance(msg, PrivateMessage):
+            user_id = msg.author_id
             guild = await bot.client.fetch_guild(os.getenv("KOOK_GUILD_ID"))
-            await guild.grant_role(user_id, os.getenv("MEMBER_ID"))
-        await msg.reply(message, mention_author=False)
+            guild_user = await guild.fetch_user(user_id)
+            if guild_user.roles:
+                await msg.reply("您已经通过验证了", mention_author=False)
+                return
+
+            result, message = ev.verify_captcha(user_id, code)
+            if result:
+                await guild.grant_role(user_id, os.getenv("MEMBER_ID"))
+            await msg.reply(message, mention_author=False)
+    except Exception as result:
+        print(traceback.format_exc())
 
 
 if __name__ == '__main__':

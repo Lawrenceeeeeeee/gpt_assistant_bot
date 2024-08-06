@@ -2,6 +2,7 @@ import email
 from math import prod
 import smtplib
 import redis
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 from dotenv import load_dotenv
@@ -49,22 +50,67 @@ def send_verification_code(to_email, verification_code):
     sender_name = '青雀'
     
     # 收件人姓名和邮箱
-    recipient_name = 'test'
+    recipient_name = to_email.split('@')[0]
     recipient_email = to_email
     
     # 邮件内容
     subject = 'CUFER\'S HUB 验证码'
-    body = f'''您的验证码是：{verification_code}, 千万不要告诉别人哦！
-
-什么? 没有申请过验证码？那你可得小心了, 要好好保管自己的邮箱哦。
+    html_body = f'''\
+<html>
+    <head>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                background-color: #f6f6f6;
+                padding: 20px;
+            }}
+            .container {{
+                background-color: white;
+                padding: 20px;
+                border-radius: 5px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            }}
+            h1 {{
+                color: #333;
+            }}
+            .code {{
+                font-size: 24px;
+                color: #007bff;
+                font-weight: bold;
+                margin: 10px 0;
+            }}
+            p {{
+                color: #555;
+            }}
+            .footer {{
+                margin-top: 20px;
+                font-size: 12px;
+                color: #aaa;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>您的验证码是：</h1>
+            <p class="code">{verification_code}</p>
+            <p>千万不要告诉别人哦！</p>
+            <p>什么? 没有申请过验证码？那你可得小心了<br>
+            要好好保管自己的邮箱哦。</p>
+        </div>
+        <div class="footer">
+            <p>此邮件由CUFER'S HUB发送，请勿回复。</p>
+        </div>
+    </body>
+</html>
     '''
     
     # 创建邮件对象
-    msg = MIMEText(body, 'plain', 'utf-8')
+    msg = MIMEMultipart()
     msg['From'] = formataddr((sender_name, sender_email))
     msg['To'] = formataddr((recipient_name, recipient_email))
     msg['Subject'] = subject
-    
+    msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
     try:
         # 连接到 SMTP 服务器
         server = smtplib.SMTP_SSL(smtp_server, smtp_port)
@@ -77,7 +123,7 @@ def send_verification_code(to_email, verification_code):
         server.quit()
         print('Email sent successfully')
     except Exception as e:
-        print(f'Failed to send email: {e}') 
+        print(f'Failed to send email: {e}')
 
 def create_captcha(user_id, student_id):
     timestamp = int(time.time())
