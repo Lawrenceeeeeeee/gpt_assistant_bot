@@ -12,7 +12,8 @@ import hashlib
 import sqlite3
 import time
 from datetime import timedelta
-
+from khl import Message, PrivateMessage
+import traceback
 from requests import delete
 
 
@@ -204,6 +205,24 @@ def delete_user(user_id):
         conn.commit()
     except Exception as e:
         print(f'Failed to delete user: {e}')
+
+async def verif(msg: Message, student_id: str):
+    try:
+        user_id = msg.author_id
+        result, message = create_captcha(user_id, student_id)
+        await msg.reply(message, mention_author=False)
+    except Exception as result:
+        print(traceback.format_exc())
+
+async def captcha(msg: Message, code: str):
+    try:
+        user_id = msg.author_id
+        result, message = verify_captcha(user_id, code)
+        return result, message
+    except Exception as result:
+        print(traceback.format_exc())
+        return False, '验证失败。请联系管理员。'
+
 
 if __name__ == '__main__':
     user_id = '26338xxxxxx'
