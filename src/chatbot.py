@@ -61,7 +61,7 @@ class UserMessage(BaseModel):
                 parsed_url = urlparse(image)
                 # 提取文件名
                 file_name = os.path.basename(parsed_url.path)
-                file_path = self.download_file(image, f"tmp/{file_name}")
+                file_path = self.download_file(image, f"src/tmp/{file_name}")
                 uploaded_image = await aclient.files.create(
                     file=open(file_path, "rb"),
                     purpose="vision"
@@ -118,18 +118,22 @@ async def chatbot_reply(content, channel_id, author_id, author_nickname):
     # 从数据库中获取指定channel的thread_id, 如果有就返回thread_id,没有thread_id就是None
     c.execute(f"SELECT thread_id FROM threads WHERE channel_id = '{channel_id}';")
     thread_id = c.fetchone()
+    
     if not thread_id:
         thread_info = await aclient.beta.threads.create()
         # 在数据库中添加新的thread_id
         c.execute(f"INSERT INTO threads (channel_id, thread_id) VALUES ('{channel_id}', '{thread_info.id}');")
         thread_id = thread_info.id
-    elif await check_thread(thread_id) is None:
-        thread_info = await aclient.beta.threads.create()
-        # 更新数据库中的thread_id        
-        c.execute(f"UPDATE threads SET thread_id = '{thread_info.id}' WHERE channel_id = '{channel_id}';")
-        thread_id = thread_info.id
-    elif thread_id:
-        thread_id = thread_id[0]
+    else: 
+        print(f"频道{channel_id}正在使用的thread_id为{thread_id}")
+        if await check_thread(thread_id[0]) is None:
+            print(f"频道{channel_id}的thread_id {thread_id}已失效")
+            thread_info = await aclient.beta.threads.create()
+            # 更新数据库中的thread_id        
+            c.execute(f"UPDATE threads SET thread_id = '{thread_info.id}' WHERE channel_id = '{channel_id}';")
+            thread_id = thread_info.id
+        else:
+            thread_id = thread_id[0]
     chatbot = Assistant(aclient, thread_id)
     
     text = ""

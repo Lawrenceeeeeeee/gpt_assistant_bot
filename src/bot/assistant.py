@@ -1,9 +1,13 @@
-from openai import OpenAI
+from openai import AsyncOpenAI
 import os
 from pydantic import BaseModel
 import time
 from dotenv import load_dotenv
 from retry import retry
+import json
+from ..func_call.hefeng import get_now, get_minutely
+from ..func_call.gaode import route_planning
+import traceback
 
 load_dotenv()
 
@@ -35,55 +39,97 @@ class Assistant():
             )
 
     @retry(tries=5, delay=1)
-    async def create_a_run(self):
+    async def create_a_run(self, tool_outputs=None, run_id=None) -> None:
         # instruction = None
         # if "name" in kwargs:
         #     instruction = f"发送者是：{kwargs['name']}"
         #     print(instruction)
-        
-        run = await self.aclient.beta.threads.runs.create_and_poll(
-            assistant_id=self.assistant_id,
-            thread_id=self.thread_id,
-        )
-        prev_run_id = run.id
+        if tool_outputs:
+            run = await self.aclient.beta.threads.runs.submit_tool_outputs_and_poll(
+                thread_id=self.thread_id,
+                run_id=run_id,
+                tool_outputs=tool_outputs
+            )
+        else:
+            run = await self.aclient.beta.threads.runs.create_and_poll(
+                assistant_id=self.assistant_id,
+                thread_id=self.thread_id,
+            )
 
-        while run.status != "completed":
+        if run.status == 'completed':
+            messages = await self.aclient.beta.threads.messages.list(
+                thread_id=self.thread_id
+            )
+            return messages
+        else:
             print(run.status)
-            time.sleep(1)
-
-        messages = await self.aclient.beta.threads.messages.list(thread_id=self.thread_id)
-        return messages
-
-if __name__ == "__main__":
-    image_url = "https://upload-bbs.miyoushe.com/upload/2024/07/22/288909600/5073838317d8bf76afdb06020fd83424_7475603835828891488.png?x-oss-process=image//resize,s_600/quality,q_80/auto-orient,0/interlace,1/format,png"
-    content = [
-        # {
-        #     "type":"image_url",
-        #     "image_url":{
-        #         "url":image_url,
-        #         "detail": "high"
-        #     },
-        # },
-        {
-            "type":"text",
-            "text":"你好啊",
-        }
-    ]
-    attachments = [
-        {
-            "file_id":"file-rATMbiAdvwxMyy4CrzxwAzsn",
-            "tools":[
-                {
-                    "type":"file_search"
-                }
-            ]
-        }
-    ]
-    
-    assistant = Assistant()
-    # assistant.add_message(content)
-    # res = assistant.create_a_run()
-    # print(res.data[0].content[0].text.value)
-    assistant.add_message("[Lawrence (id:123456789111)] 我叫什么名字")
-    res = assistant.create_a_run()
-    print(res.data[0].content[0].text.value)
+        
+        # Define the list to store tool outputs
+        tool_outputs = []
+        
+        # Loop through each tool in the required action section
+        for tool in run.required_action.submit_tool_outputs.tool_calls:
+            if tool.function.name == "get_now":
+                print("get_now")
+                try:
+                    print(tool.function.arguments)
+                    res = get_now(json.loads(tool.function.arguments)["location"])
+                    res = res.dict()
+                except Exception as e:
+                    print("Failed to get weather data:", e)
+                    print(traceback.format_exc())
+                    res = "获取天气数据失败"
+                print(res)
+                tool_outputs.append({
+                    "tool_call_id": tool.id,
+                    "output": f"{res}"
+                })
+            elif tool.function.name == "get_minutely":
+                print("get_minutely")
+                try:
+                    print(tool.function.arguments)
+                    res = get_minutely(json.loads(tool.function.arguments)["location"])
+                    res = res.dict()
+                except Exception as e:
+                    print("Failed to get weather data:", e)
+                    print(traceback.format_exc())
+                    res = "获取分钟级降水数据失败"
+                print(res)
+                tool_outputs.append({
+                    "tool_call_id": tool.id,
+                    "output": f"{res}"
+                })
+            elif tool.function.name == "route_planning":
+                print("route_planning")
+                try:
+                    print(tool.function.arguments)
+                    res = route_planning(**json.loads(tool.function.arguments))
+                except Exception as e:
+                    print("Failed to get route data:", e)
+                    print(traceback.format_exc())
+                    res = "获取路线规划数据失败"
+                print(res)
+                tool_outputs.append({
+                    "tool_call_id": tool.id,
+                    "output": f"{res}"
+                })
+        
+        # Submit all tool outputs at once after collecting them in a list
+        if tool_outputs:
+            try:
+                res = await self.create_a_run(tool_outputs=tool_outputs, run_id=run.id)
+                print("Tool outputs submitted successfully.")
+                return res
+            except Exception as e:
+                print(traceback.format_exc())
+        else:
+            print("No tool outputs to submit.")
+        
+        if run.status == 'completed':
+            messages = await self.aclient.beta.threads.messages.list(
+                thread_id=self.thread_id
+            )
+            return messages
+        else:
+            print(run.status)
+        return None

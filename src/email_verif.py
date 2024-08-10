@@ -95,8 +95,7 @@ def send_verification_code(to_email, verification_code):
             <h1>您的验证码是：</h1>
             <p class="code">{verification_code}</p>
             <p>千万不要告诉别人哦！</p>
-            <p>什么? 没有申请过验证码？那你可得小心了<br>
-            要好好保管自己的邮箱哦。</p>
+            <p>什么? 没有申请过验证码？那就不用管这封邮件</p>
         </div>
         <div class="footer">
             <p>此邮件由CUFER'S HUB发送，请勿回复。</p>
@@ -205,6 +204,9 @@ def delete_user(user_id):
         conn.commit()
     except Exception as e:
         print(f'Failed to delete user: {e}')
+
+# -----------------------------------------
+# 以下是命令处理函数
 
 async def verif(msg: Message, student_id: str):
     try:
