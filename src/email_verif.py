@@ -24,7 +24,9 @@ conn = sqlite3.connect('/root/gpt_assistant_bot/user_info.db')
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS users (
 user_id TEXT PRIMARY KEY,
-student_id TEXT
+student_id TEXT,
+level TEXT DEFAULT 't0',
+level_expires_at TIMESTAMP
 );
 ''')
 conn.commit()

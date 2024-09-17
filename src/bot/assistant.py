@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from retry import retry
 import json
 from ..func_call.hefeng import get_now, get_minutely
-from ..func_call.gaode import route_planning
+from ..func_call.gaode import route_planning, nearest_maimai
 import traceback
 
 load_dotenv()
@@ -61,6 +61,9 @@ class Assistant():
                 thread_id=self.thread_id
             )
             return messages
+        elif run.status == 'failed':
+            print(run.dict())
+            return None
         else:
             print(run.status)
         
@@ -108,6 +111,20 @@ class Assistant():
                     print("Failed to get route data:", e)
                     print(traceback.format_exc())
                     res = "获取路线规划数据失败"
+                print(res)
+                tool_outputs.append({
+                    "tool_call_id": tool.id,
+                    "output": f"{res}"
+                })
+            elif tool.function.name == "nearest_maimai":
+                print("nearest_maimai")
+                try:
+                    print(tool.function.arguments)
+                    res = nearest_maimai(json.loads(tool.function.arguments)["location"])
+                except Exception as e:
+                    print("Failed to get nearest maimai data:", e)
+                    print(traceback.format_exc())
+                    res = "获取最近的舞萌机厅数据失败"
                 print(res)
                 tool_outputs.append({
                     "tool_call_id": tool.id,

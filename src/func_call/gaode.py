@@ -151,4 +151,65 @@ def get_coordinates(address):
     else:
         return res["pois"][0]["location"].split(",")
 
+def get_coordinates_with_detailed_address(address):
+    url = "https://restapi.amap.com/v3/geocode/geo"
+    
+    params = {
+        "key": api_key,
+        "address": address,
+        "output": "json"
+    }
+    response = requests.get(url, params=params)
+    
+    if response.status_code == 200:
+        data = response.json()
+        if data["status"] == "1":
+            return data["geocodes"][0]["location"]
+        else:
+            return None
+    else:
+        response.raise_for_status()
+
+import math
+
+def haversine(lon1, lat1, lon2, lat2):
+    # 地球半径，单位为公里
+    R = 6371.0
+    
+    # 将角度转换为弧度
+    lon1_rad = math.radians(lon1)
+    lat1_rad = math.radians(lat1)
+    lon2_rad = math.radians(lon2)
+    lat2_rad = math.radians(lat2)
+    
+    # Haversine公式
+    dlat = lat2_rad - lat1_rad
+    dlon = lon2_rad - lon1_rad
+
+    a = math.sin(dlat / 2)**2 + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(dlon / 2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    distance = R * c  # 得到的距离，单位为公里
+    return distance
+     
+def nearest_maimai(location, n=5):  # n为要获取的机厅数量
+    location = search_poi2(keywords=location)["pois"][0]["location"]
+    with open("store_data_detailed.json", "r", encoding="utf-8") as f:
+        store_data = json.load(f)
+    
+    distances = []  # 用于存储所有机厅及其距离
+
+    for store in store_data:
+        try:
+            distance_km = haversine(float(location.split(",")[0]), float(location.split(",")[1]), 
+                                    float(store["location"].split(",")[0]), float(store["location"].split(",")[1]))
+            store["distance(km)"] = distance_km
+            distances.append(store)  # 将机厅和距离添加到列表中
+        except Exception as e:
+            continue  # 如果有错误，跳过该机厅
+
+    # 按照距离排序
+    distances.sort(key=lambda x: x["distance(km)"])
+    
+    return distances[:n]  # 返回最近的n个机厅
     

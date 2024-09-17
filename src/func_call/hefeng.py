@@ -4,14 +4,11 @@ from urllib.parse import urlparse
 import json
 from dotenv import load_dotenv
 from pydantic import BaseModel
-import pandas as pd
 from . import gaode
 
 load_dotenv()
 
 api_key = os.getenv("HEFENG_API_KEY")
-
-china_cities = pd.read_csv("/root/gpt_assistant_bot/src/func_call/LocationList/China-City-List-latest.csv")
 
 class Now(BaseModel):
     obsTime: str
@@ -39,10 +36,35 @@ class Minutely(BaseModel):
     summary: str
     minutely: list[MinutelyItem]
 
+class Location(BaseModel):
+    name: str
+    id: str
+    lat: str
+    lon: str
+    adm2: str
+    adm1: str
+    country: str
+    tz: str
+    utcOffset: str
+    isDst: str
+    type: str
+    rank: str
+    fxLink: str
+
+def get_location(location: str):
+    url = f"https://geoapi.qweather.com/v2/city/lookup?location={location}&key={api_key}"
+    res = requests.get(url)
+    if res.status_code != 200:
+        return None
+    data = json.loads(res.text)
+    l = Location(**data["location"][0])
+    return l
 
 def get_now(location: str="昌平"):
     try:
-        location_id = china_cities[china_cities["Location_Name_ZH"] == location]["Location_ID"].values[0]
+        location = get_location(location)
+        print(f"正在获取{location.name}的实时天气数据...")
+        location_id = location.id
     except:
         return None
     url = f"https://devapi.qweather.com/v7/weather/now?key={api_key}&location={location_id}"

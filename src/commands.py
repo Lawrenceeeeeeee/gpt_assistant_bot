@@ -1,4 +1,4 @@
-from . import chatbot, email_verif, bot_func
+from . import chatbot, email_verif, bot_func, membership
 from khl import Bot, Message, MessageTypes, EventTypes, Event, PrivateMessage, PublicMessage, guild
 import os
 from dotenv import load_dotenv
@@ -38,4 +38,13 @@ def init(bot:Bot):
     @bot.command(name="send")
     async def send(msg: Message, channel_id: str):
         await bot_func.send(msg, channel_id)
+        
+    @bot.command(name="enterCode")
+    async def enterCode(msg: Message, code: str):
+        if isinstance(msg, PrivateMessage):
+            user_id = msg.author_id
+            guild = await bot.client.fetch_guild(os.getenv("KOOK_GUILD_ID"))
+            guild_user = await guild.fetch_user(user_id)
+            result, message = await membership.secret_verify(code, user_id)
+            await msg.reply(message, mention_author=False)
         
