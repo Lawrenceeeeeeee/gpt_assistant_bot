@@ -7,6 +7,7 @@ from retry import retry
 import json
 from ..func_call.hefeng import get_now, get_minutely
 from ..func_call.gaode import route_planning, nearest_maimai
+from ..func_call.crypto import get_candlesticks
 import traceback
 
 load_dotenv()
@@ -39,11 +40,7 @@ class Assistant():
             )
 
     @retry(tries=5, delay=1)
-    async def create_a_run(self, tool_outputs=None, run_id=None) -> None:
-        # instruction = None
-        # if "name" in kwargs:
-        #     instruction = f"发送者是：{kwargs['name']}"
-        #     print(instruction)
+    async def create_a_run(self, msg, tool_outputs=None, run_id=None) -> None:
         if tool_outputs:
             run = await self.aclient.beta.threads.runs.submit_tool_outputs_and_poll(
                 thread_id=self.thread_id,
@@ -130,11 +127,25 @@ class Assistant():
                     "tool_call_id": tool.id,
                     "output": f"{res}"
                 })
+            elif tool.function.name == "get_candlesticks":
+                print("get_candlesticks")
+                try:
+                    print(tool.function.arguments)
+                    res = await get_candlesticks(msg, **json.loads(tool.function.arguments))
+                except Exception as e:
+                    print("Failed to get candlesticks data:", e)
+                    print(traceback.format_exc())
+                    res = "获取K线数据失败"
+                print(res)
+                tool_outputs.append({
+                    "tool_call_id": tool.id,
+                    "output": f"{res}"
+                })
         
         # Submit all tool outputs at once after collecting them in a list
         if tool_outputs:
             try:
-                res = await self.create_a_run(tool_outputs=tool_outputs, run_id=run.id)
+                res = await self.create_a_run(msg, tool_outputs=tool_outputs, run_id=run.id)
                 print("Tool outputs submitted successfully.")
                 return res
             except Exception as e:

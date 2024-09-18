@@ -39,6 +39,9 @@ async def check_thread(thread_id):
         res = None
     return res
 
+class Message(BaseModel):
+    responses: list[str] | None = None
+    attachments: list[str] | None = None
 
 class UserMessage(BaseModel):
     text: str | None = None
@@ -114,7 +117,7 @@ class UserMessage(BaseModel):
         return attachments_dicts
 
 
-async def chatbot_reply(content, channel_id, author_id, author_nickname):
+async def chatbot_reply(msg, content, channel_id, author_id, author_nickname):
     # 从数据库中获取指定channel的thread_id, 如果有就返回thread_id,没有thread_id就是None
     c.execute(f"SELECT thread_id FROM threads WHERE channel_id = '{channel_id}';")
     thread_id = c.fetchone()
@@ -164,18 +167,29 @@ async def chatbot_reply(content, channel_id, author_id, author_nickname):
     print(user_content_msg)
     await chatbot.add_message(user_content_msg, attachments)
     
-    response = await chatbot.create_a_run()
+    response = await chatbot.create_a_run(msg)
     # res.data[0].content[0].text.value
     if response.data[0].role == "assistant":
         for res in response.data[0].content:                
             if res.type == "text":
-                response = res.text.value
+                text_response = res.text.value
             else:
-                response = "Unsupported message type"
+                text_response = "Unsupported message type"
+            atts = []
+            if res.text.annotations:
+                for annotation in res.text.annotations:
+                    if annotation.type == "file_path":
+                        file_id = annotation.file_path.file_id
+                        file_name = annotation.text.split("/")[-1]
+                        atts.append(file_name)
+                        file_data = await aclient.files.content(file_id)
+                        file_data_bytes = file_data.read()
+                        with open(f'./src/tmp/{file_name}', "wb") as file:
+                            file.write(file_data_bytes)
             # 发送响应
-            print(response)
-            # await msg.reply(response, mention_author=False)
-            return response
+            print(text_response)
+            return {"text": text_response, "attachments": atts}
+
 
 async def clear_history(msg:Message):
     channel_id = msg._ctx.channel._id if isinstance(msg, PublicMessage) else msg._ctx.channel.id

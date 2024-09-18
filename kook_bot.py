@@ -4,6 +4,7 @@ import json
 import traceback
 import asyncio
 import random
+import contextvars
 
 from src import email_verif as ev
 from src import commands, chatbot_reply, msg_const
@@ -12,12 +13,13 @@ from khl.card import Card, CardMessage, Module, Types, Element, Struct
 
 load_dotenv()
 
+msg_var = contextvars.ContextVar("msg")
+
 ## websocket
 bot = Bot(token = os.getenv("KOOK_WEBSOCKET_TOKEN"))
 
 @bot.on_message()
 async def on_message(msg: Message):  # when `name` is not set, the function name will be used
-
     bot_info = await bot.client.fetch_me()
     bot_id = bot_info.id
     
@@ -47,8 +49,17 @@ async def on_message(msg: Message):  # when `name` is not set, the function name
         content = msg.content
     
     if await reply_decision():
-        response = await chatbot_reply(content, channel_id, author_id, author_nickname)
-        await msg.reply(response, mention_author=False)
+        msg_var.set(msg)
+        print(f"After setting msg_var: {msg_var.get()}")
+        response = await chatbot_reply(msg, content, channel_id, author_id, author_nickname)
+        await msg.reply(response['text'], mention_author=False)
+        for att in response['attachments']:
+            path = f"./src/tmp/{att}"
+            file_url = await bot.client.create_asset(path) # 先上传图片并获取链接
+            await msg.reply(file_url,type=MessageTypes.FILE)
+            print(f"send attatchment | {file_url}")
+            # 删除临时文件
+            os.remove(path)
 
 @bot.on_event(EventTypes.JOINED_GUILD)
 async def join_guild_send_event(b: Bot, e: Event):
