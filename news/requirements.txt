@@ -1,0 +1,9 @@
+khl.py
+pytz
+pydantic
+openai
+python-dotenv
+schedule
+requests
+datetime
+asyncio

@@ -1,0 +1,16 @@
+--index-url https://download.pytorch.org/whl/cpu
+torch
+
+--index-url https://pypi.org/simple
+khl.py
+pytz
+pydantic
+python-dotenv
+pandas
+requests
+datetime
+asyncio
+scikit-learn
+matplotlib
+okx-sdk
+websockets

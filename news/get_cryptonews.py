@@ -5,8 +5,16 @@ from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+from khl import Bot, Message, MessageTypes, EventTypes, Event, PrivateMessage, PublicMessage, guild
+from khl.card import Card, CardMessage, Module, Types, Element, Struct
+import asyncio
+import schedule
+import time
 
 load_dotenv()
+
+## websocket
+bot = Bot(token = os.getenv("KOOK_WEBSOCKET_TOKEN"))
 
 # 设置 OpenAI API Key
 openai_api_key = os.getenv('OPENAI_API_KEY')   # 替换为你的 OpenAI API Key
@@ -103,16 +111,59 @@ def get_news_data():
         print(f"Error: {response.status_code}")
         return None
 
-# 获取新闻数据
-news_data = get_news_data()
+crypto_channel_id = "5816881603343440"
 
-if news_data:
-    # 格式化新闻并输出每条新闻
-    formatted_news = format_news_with_time(news_data)
-    for news in formatted_news:
-        print(news)  # 格式化输出为可读文本
+async def send_msg(ch, text):
+    structured_msg = [
+                        {
+                            "type": "card",
+                            "theme": "secondary",
+                            "size": "lg",
+                            "modules": [
+                            {
+                                "type": "section",
+                                "text": {
+                                "type": "kmarkdown",
+                                "content": f"{text}"
+                                }
+                            }
+                            ]
+                        }
+                        ]
+    ret = await ch.send(text) # 方法1
+    print(f"ch.send | msg_id {ret['msg_id']}") # 方法1 发送消息的id 
     
-    # 生成晨报
-    morning_report = generate_morning_report(news_data)
-    print("\n### 今日晨报 ###")
-    print(morning_report)
+
+async def main():
+    ch = await bot.client.fetch_public_channel(crypto_channel_id)
+    # 获取新闻数据
+    news_data = get_news_data()
+
+    if news_data:
+        # 格式化新闻并输出每条新闻
+        formatted_news = format_news_with_time(news_data)
+        for news in formatted_news:
+            print(news)  # 格式化输出为可读文本
+        
+        # 生成晨报
+        morning_report = generate_morning_report(news_data)
+        print("\n### 今日晨报 ###")
+        print(morning_report)
+        msg = "**今日晨报**\n" + morning_report
+        await send_msg(ch, msg)
+
+# 定时调度器的包装器，运行异步函数
+def run_async_job():
+    asyncio.run(main())
+
+if __name__ == "__main__":
+    print("crypto新闻启动！")
+    # 每天早上8点运行任务
+    schedule.every().day.at("08:00").do(run_async_job)
+    # 每天下午6点运行任务
+    schedule.every().day.at("18:00").do(run_async_job)
+
+    while True:
+        # 检查是否有任务到期需要执行
+        schedule.run_pending()
+        time.sleep(60)  # 每隔 60 秒检查一次

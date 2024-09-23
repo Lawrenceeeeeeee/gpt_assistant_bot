@@ -20,7 +20,7 @@ from requests import delete
 r = redis.Redis(host='localhost', port=6379, db=0)
 
 # 创建数据库表
-conn = sqlite3.connect('/root/gpt_assistant_bot/user_info.db')
+conn = sqlite3.connect('user_info.db')
 c = conn.cursor()
 c.execute('''CREATE TABLE IF NOT EXISTS users (
 user_id TEXT PRIMARY KEY,

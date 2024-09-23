@@ -32,12 +32,14 @@ class Assistant():
                 content=content,
             )
         else:
+            print("有附件")
             message = await self.aclient.beta.threads.messages.create(
                 thread_id=self.thread_id,
                 role="user",
                 content=content,
                 attachments=attachments,
             )
+            print(message.dict())
 
     @retry(tries=5, delay=1)
     async def create_a_run(self, msg, tool_outputs=None, run_id=None) -> None:

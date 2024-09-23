@@ -91,7 +91,8 @@ class UserMessage(BaseModel):
         attachments_dicts = []
         if self.files:
             for file_item in self.files:
-                local_filename = f"tmp/{file_item['title']}"
+                print(f"收到文件: {file_item['title']}")
+                local_filename = f"src/tmp/{file_item['title']}"
                 file_ext = file_item['title'].split(".")[-1]
                 if file_ext in tools_selection["file_search"]:
                     tool = "file_search"
@@ -112,6 +113,7 @@ class UserMessage(BaseModel):
                             {"type": tool}
                         ]
                     }
+                    
                     attachments_dicts.append(attachment)
                 os.remove(local_filename)
         return attachments_dicts
@@ -162,9 +164,15 @@ async def chatbot_reply(msg, content, channel_id, author_id, author_nickname):
         images=images if images else None,
         files=files if files else None
     )
+    print("用户消息：")
+    print(user_message)
     attachments = await user_message.attachments()
+    print("附件：")
+    print(attachments)
     user_content_msg = await user_message.user_content()
+    print("用户消息内容：")
     print(user_content_msg)
+    
     await chatbot.add_message(user_content_msg, attachments)
     
     response = await chatbot.create_a_run(msg)
