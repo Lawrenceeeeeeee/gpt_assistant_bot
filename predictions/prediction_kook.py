@@ -6,6 +6,8 @@ import time
 import traceback
 import pandas as pd
 import asyncio
+import schedule
+from datetime import datetime, timedelta
 
 from trainee import predict_next_value
 
@@ -71,11 +73,24 @@ async def main():
     now = int(time.time() * 1000)
     before = now - 3 * 24 * 60 * 60 * 1000
     data = get_candlesticks('BTC-USDT-SWAP', before, now)
+    data = data[data['confirm'] != '0']
+    print(data.head())
     res = predict_next_value(data)
-    message = f"BTC-USDT-SWAP 未来1小时涨跌幅为{res*100:.2f}%"
+    message = f"BTC-USDT-SWAP 预计未来1小时涨跌幅为{res*100:.2f}%"
     await send_msg(ch, message)
 
+def time_until_next_hour():
+    """计算距离下一个整点的时间差"""
+    now = datetime.now()
+    next_hour = (now.replace(second=0, microsecond=0, minute=0) + timedelta(hours=1))
+    return (next_hour - now).total_seconds()
+
+async def run_every_hour():
+    """每到整点执行 main 函数"""
+    while True:
+        await asyncio.sleep(time_until_next_hour())
+        await main()
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    asyncio.run(run_every_hour())
     
